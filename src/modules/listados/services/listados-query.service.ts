@@ -1,0 +1,274 @@
+import { prisma } from "../../../config/database";
+import { Prisma, type TipoFrenteMaterial } from "@prisma/client";
+import { scopeService } from "../../auth/services/scope.service";
+import { NotFoundError, ForbiddenError } from "../../../utils/errors";
+import { PERMISOS } from "../../../config/permissions";
+import type { ListListadosQuery } from "../listados.schema";
+
+export class ListadosQueryService {
+  /**
+   * Consulta paginada y filtrada incorporando directamente el alcance bidimensional (departamento + línea).
+   * Respeta activos en departamento y línea tanto en conteo como en registros devueltos.
+   */
+  async getListados(usuarioId: number, filtros: Partial<ListListadosQuery> = {}) {
+    const scope = await scopeService.resolveUserScope(usuarioId);
+
+    // Validación de alcance departamental si se provee departamentoId explícito
+    if (filtros.departamentoId !== undefined) {
+      if (!scope.esGlobal && filtros.departamentoId !== scope.departamentoId) {
+        throw new ForbiddenError("No tiene autorización para consultar listados de otro departamento");
+      }
+    }
+
+    const scopeWhere = filtros.modoGlobal
+      ? (scope.esGlobal ? {} : { departamentoId: scope.departamentoId })
+      : scopeService.buildScopeWhere(scope, filtros.lineaProduccionId);
+
+    const where: Prisma.ListadoMaterialWhereInput = {
+      ...scopeWhere,
+      departamento: { estado: "ACTIVO" },
+      lineaProduccion: { estado: "ACTIVO" },
+      ...(scope.esGlobal && filtros.departamentoId ? { departamentoId: filtros.departamentoId } : {}),
+      ...(filtros.estado ? {
+        estado: (() => {
+          if (Array.isArray(filtros.estado)) {
+            return { in: filtros.estado as Prisma.EnumEstadoListadoFilter['in'] };
+          }
+          if (typeof filtros.estado === 'string' && filtros.estado.includes(',')) {
+            const list = filtros.estado.split(',').map((s) => s.trim()) as Prisma.EnumEstadoListadoFilter['in'];
+            return { in: list };
+          }
+          return filtros.estado as Prisma.EnumEstadoListadoFilter['equals'];
+        })(),
+      } : (filtros.excludeEstado ? {
+        estado: { not: filtros.excludeEstado as any },
+      } : {})),
+      ...(filtros.numeroListado && {
+        numeroListado: { contains: filtros.numeroListado },
+      }),
+      ...((filtros.fechaDesde || filtros.fechaHasta) && {
+        fechaRequerida: {
+          ...(filtros.fechaDesde && {
+            gte: new Date(filtros.fechaDesde.includes('T') ? filtros.fechaDesde : `${filtros.fechaDesde}T00:00:00.000Z`),
+          }),
+          ...(filtros.fechaHasta && {
+            lte: new Date(filtros.fechaHasta.includes('T') ? filtros.fechaHasta : `${filtros.fechaHasta}T23:59:59.999Z`),
+          }),
+        },
+      }),
+    };
+
+    if (!scope.esGlobal && !filtros.modoGlobal) {
+      if (scope.tipoSurtidoAlmacen) {
+        const permitidos = scope.tipoSurtidoAlmacen
+          .split(",")
+          .map((s) => s.trim().toUpperCase())
+          .filter((s) => s === "DIRECTOS" || s === "INDIRECTOS" || s === "BOLSAS") as ("DIRECTOS" | "INDIRECTOS" | "BOLSAS")[];
+        if (!scope.tipoSurtidoAlmacen.includes("TODOS") && permitidos.length > 0) {
+          const isConsultandoPendientes = filtros.estado && (
+            (typeof filtros.estado === 'string' && (filtros.estado.includes('PENDIENTE') || filtros.estado.includes('EN_PROCESO'))) ||
+            (Array.isArray(filtros.estado) && filtros.estado.some((e) => e === 'PENDIENTE' || e === 'EN_PROCESO'))
+          );
+
+          if (isConsultandoPendientes) {
+            where.frentes = {
+              some: {
+                tipoFrente: { in: permitidos },
+                estado: { in: ["PENDIENTE", "SEPARADO"] },
+              },
+            };
+          } else {
+            where.frentes = {
+              some: { tipoFrente: { in: permitidos } }
+            };
+          }
+        }
+      } else if (scope.tipoMaterialAuditor && !scope.tipoMaterialAuditor.toUpperCase().includes("TODOS")) {
+        const frentesAud = scope.tipoMaterialAuditor
+          .split(",")
+          .map((s) => s.trim().toUpperCase())
+          .filter((s) => s === "DIRECTOS" || s === "INDIRECTOS" || s === "BOLSAS") as ("DIRECTOS" | "INDIRECTOS" | "BOLSAS")[];
+        where.frentes = {
+          some: { tipoFrente: { in: frentesAud } },
+        };
+      } else if (scope.rolCodigo === "REGISTRADOR") {
+        // Regla de Negocio REGISTRADOR:
+        // Ve los listados de su departamento (registrados por él o por cualquier otro registrador de su departamento).
+        // En historial ve todos los estados; en vistas operativas se respeta el filtro de estado correspondiente.
+        where.departamentoId = scope.departamentoId;
+      }
+    }
+
+    const page = filtros.page ?? filtros.pagina ?? 1;
+    const limit = filtros.limit ?? filtros.porPagina ?? 60;
+    const skip = (page - 1) * limit;
+
+    const [total, listados] = await prisma.$transaction([
+      prisma.listadoMaterial.count({ where }),
+      prisma.listadoMaterial.findMany({
+        where,
+        include: {
+          lineaProduccion: { select: { id: true, codigo: true, nombre: true, area: true, orden: true } },
+          departamento: { select: { id: true, codigo: true, nombre: true } },
+          creadoPorUsuario: { select: { id: true, usuario: true, nombre: true } },
+          frentes: {
+            select: {
+              id: true,
+              tipoFrente: true,
+              estado: true,
+            },
+          },
+        },
+        orderBy: [{ fechaRequerida: "asc" }, { id: "asc" }],
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    const totalPages = Math.ceil(total / limit) || 1;
+    const hasNextPage = page < totalPages;
+    const hasPreviousPage = page > 1;
+
+    const pagination = {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNextPage,
+      hasPreviousPage,
+    };
+
+    return {
+      items: listados,
+      data: listados, // compatibilidad con clientes existentes
+      pagination,
+      meta: {
+        pagina: page,
+        porPagina: limit,
+        totalPaginas: totalPages,
+        ...pagination,
+      },
+    };
+  }
+
+  /**
+   * Obtiene un listado por ID garantizando que pertenezca al alcance autorizado en la consulta misma.
+   */
+  async getListadoById(id: number, usuarioId: number) {
+    const scope = await scopeService.resolveUserScope(usuarioId);
+    const scopeWhere = scopeService.buildScopeWhere(scope);
+
+    const listado = await prisma.listadoMaterial.findFirst({
+      where: {
+        id,
+        ...scopeWhere,
+        departamento: { estado: "ACTIVO" },
+        lineaProduccion: { estado: "ACTIVO" },
+      },
+      include: {
+        lineaProduccion: { select: { id: true, codigo: true, nombre: true, area: true, orden: true, estado: true } },
+        departamento: { select: { id: true, codigo: true, nombre: true, estado: true } },
+        creadoPorUsuario: { select: { id: true, usuario: true, nombre: true } },
+        frentes: {
+          include: {
+            separadoPor: { select: { id: true, usuario: true, nombre: true } },
+            entregadoPor: { select: { id: true, usuario: true, nombre: true } },
+            validadoPor: { select: { id: true, usuario: true, nombre: true } },
+            descontadoPor: { select: { id: true, usuario: true, nombre: true } },
+          },
+        },
+        historialEstados: {
+          include: {
+            cambiadoPorUsuario: { select: { id: true, usuario: true, nombre: true } },
+          },
+          orderBy: { fechaCambio: "asc" },
+        },
+      },
+    });
+
+    if (!listado) {
+      throw new NotFoundError(`Listado con ID ${id} no encontrado o fuera de su alcance autorizado`);
+    }
+
+    return listado;
+  }
+
+  /**
+   * Obtiene la lista ordenada descendente de años reales que tienen registros
+   * de listados de material en la base de datos dentro del alcance autorizado del usuario.
+   */
+  async getAniosDisponibles(usuarioId: number): Promise<number[]> {
+    const scope = await scopeService.resolveUserScope(usuarioId);
+    const scopeWhere = scopeService.buildScopeWhere(scope);
+
+    const listados = await prisma.listadoMaterial.findMany({
+      where: {
+        ...scopeWhere,
+        departamento: { estado: "ACTIVO" },
+        lineaProduccion: { estado: "ACTIVO" },
+      },
+      select: {
+        fechaRequerida: true,
+      },
+    });
+
+    const aniosSet = new Set<number>();
+    for (const item of listados) {
+      if (item.fechaRequerida) {
+        const y = new Date(item.fechaRequerida).getFullYear();
+        if (y >= 2020 && y <= 2030) {
+          aniosSet.add(y);
+        }
+      }
+    }
+
+    const anios = Array.from(aniosSet).sort((a, b) => b - a);
+
+    // Si aún no hubiese registros, retornar el año en curso como mínimo por defecto
+    if (anios.length === 0) {
+      anios.push(new Date().getFullYear());
+    }
+
+    return anios;
+  }
+
+  /**
+   * Conteo exacto de listados con al menos un frente en ENTREGADO elegible para auditoría
+   * según las asignaciones y permisos del usuario autenticado.
+   */
+  async getAuditoriaCount(usuarioId: number, permisosUsuario: string[]): Promise<number> {
+    if (!permisosUsuario || !permisosUsuario.includes(PERMISOS.LISTADO_DESCONTAR)) {
+      return 0;
+    }
+
+    const scope = await scopeService.resolveUserScope(usuarioId);
+    const authorizedFrentes = scopeService.getAuthorizedAuditFrentes(scope);
+
+    // Deny-by-default para usuarios sin alcance autorizado de auditoría
+    if (!authorizedFrentes) {
+      return 0;
+    }
+
+    const frentesPermitidos: TipoFrenteMaterial[] | null =
+      authorizedFrentes === "TODOS" ? null : authorizedFrentes;
+
+    const scopeWhere = scopeService.buildScopeWhere(scope);
+
+    return prisma.listadoMaterial.count({
+      where: {
+        ...scopeWhere,
+        departamento: { estado: "ACTIVO" },
+        lineaProduccion: { estado: "ACTIVO" },
+        estado: { not: "CANCELADO" },
+        frentes: {
+          some: {
+            estado: "ENTREGADO",
+            ...(frentesPermitidos ? { tipoFrente: { in: frentesPermitidos } } : {}),
+          },
+        },
+      },
+    });
+  }
+}
+
+export const listadosQueryService = new ListadosQueryService();
