@@ -33,6 +33,7 @@ export const createLineSchema = z.object({
     .min(2, "El nombre debe tener al menos 2 caracteres")
     .max(100, "El nombre no debe exceder 100 caracteres"),
   area: z.enum(["BOTA", "ACCESORIOS"]).optional(),
+  diasTolerancia: z.number().int().min(0, "Los días de tolerancia deben ser mayores o iguales a 0").optional(),
   permiteDirectos: z.boolean().optional(),
   permiteIndirectos: z.boolean().optional(),
   permiteBolsas: z.boolean().optional(),
@@ -56,6 +57,7 @@ export const updateLineSchema = z.object({
     .max(100, "El nombre no debe exceder 100 caracteres")
     .optional(),
   area: z.enum(["BOTA", "ACCESORIOS"]).optional(),
+  diasTolerancia: z.number().int().min(0, "Los días de tolerancia deben ser mayores o iguales a 0").optional(),
   permiteDirectos: z.boolean().optional(),
   permiteIndirectos: z.boolean().optional(),
   permiteBolsas: z.boolean().optional(),

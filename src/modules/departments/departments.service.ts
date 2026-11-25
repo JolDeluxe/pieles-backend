@@ -210,6 +210,7 @@ export class DepartmentsService {
         departamentoId: departmentId,
         area: areaEfectiva,
         orden: nuevoOrden,
+        diasTolerancia: data.diasTolerancia ?? 3,
         ...(data.permiteDirectos !== undefined && { permiteDirectos: data.permiteDirectos }),
         ...(data.permiteIndirectos !== undefined && { permiteIndirectos: data.permiteIndirectos }),
         ...(data.permiteBolsas !== undefined && { permiteBolsas: data.permiteBolsas }),
@@ -253,6 +254,7 @@ export class DepartmentsService {
       data: {
         ...(cleanNombre && { nombre: cleanNombre }),
         ...(data.area && { area: data.area }),
+        ...(data.diasTolerancia !== undefined && { diasTolerancia: data.diasTolerancia }),
         ...(data.permiteDirectos !== undefined && { permiteDirectos: data.permiteDirectos }),
         ...(data.permiteIndirectos !== undefined && { permiteIndirectos: data.permiteIndirectos }),
         ...(data.permiteBolsas !== undefined && { permiteBolsas: data.permiteBolsas }),

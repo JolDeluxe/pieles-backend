@@ -108,7 +108,7 @@ export class ListadosQueryService {
       prisma.listadoMaterial.findMany({
         where,
         include: {
-          lineaProduccion: { select: { id: true, codigo: true, nombre: true, area: true, orden: true } },
+          lineaProduccion: { select: { id: true, codigo: true, nombre: true, area: true, orden: true, diasTolerancia: true } },
           departamento: { select: { id: true, codigo: true, nombre: true } },
           creadoPorUsuario: { select: { id: true, usuario: true, nombre: true } },
           frentes: {
@@ -166,7 +166,7 @@ export class ListadosQueryService {
         lineaProduccion: { estado: "ACTIVO" },
       },
       include: {
-        lineaProduccion: { select: { id: true, codigo: true, nombre: true, area: true, orden: true, estado: true } },
+        lineaProduccion: { select: { id: true, codigo: true, nombre: true, area: true, orden: true, diasTolerancia: true, estado: true } },
         departamento: { select: { id: true, codigo: true, nombre: true, estado: true } },
         creadoPorUsuario: { select: { id: true, usuario: true, nombre: true } },
         frentes: {
