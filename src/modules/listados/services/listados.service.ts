@@ -77,21 +77,10 @@ export class ListadosService {
     }
 
     const resultado = await prisma.$transaction(async (tx) => {
-      const frentesData: Prisma.ListadoSurtidoFrenteCreateWithoutListadoInput[] = [];
-      if (linea.permiteDirectos) {
-        frentesData.push({ tipoFrente: "DIRECTOS", estado: "PENDIENTE" });
-      }
-      if (linea.permiteIndirectos) {
-        frentesData.push({ tipoFrente: "INDIRECTOS", estado: "PENDIENTE" });
-      }
-      if (linea.permiteBolsas) {
-        frentesData.push({ tipoFrente: "BOLSAS", estado: "PENDIENTE" });
-      }
-      // Salvaguarda: si por alguna inconsistencia no tuviese ninguno, default DIRECTOS e INDIRECTOS
-      if (frentesData.length === 0) {
-        frentesData.push({ tipoFrente: "DIRECTOS", estado: "PENDIENTE" });
-        frentesData.push({ tipoFrente: "INDIRECTOS", estado: "PENDIENTE" });
-      }
+      // En Almacén de Pieles solo existe 1 proceso operativo por programa
+      const frentesData: Prisma.ListadoSurtidoFrenteCreateWithoutListadoInput[] = [
+        { tipoFrente: "DIRECTOS", estado: "PENDIENTE" }
+      ];
 
       const nuevo = await tx.listadoMaterial.create({
         data: {
