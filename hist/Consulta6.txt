@@ -1,0 +1,21 @@
+No	Departamentos	Orden	Dias
+1	BOTAS	11	3
+2	ALTA CALIDAD	12	7
+3	LAGARTO	13	7
+4	BETA 7	14	7
+5	CINTOS	21	4
+6	CINTOS MAQ	22	7
+7	BILLETERAS	23	7
+8	CHAMARRAS	24	7
+9	BOLSAS	25	7
+10			
+11			
+12			
+13			
+14			
+15			
+16			
+17			
+18			
+19			
+20			
