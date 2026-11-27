@@ -23,8 +23,29 @@ export const createApp = (): Express => {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.CORS_ORIGINS,
+      origin: (origin, callback) => {
+        // Permitir peticiones sin Origin (herramientas locales, apps móviles, curl, server-to-server)
+        if (!origin) {
+          return callback(null, true);
+        }
+
+        const isAllowed = env.CORS_ORIGINS.some((allowed) => {
+          // Coincidencia exacta o sin barra diagonal final
+          const cleanAllowed = allowed.replace(/\/+$/, "").toLowerCase();
+          const cleanOrigin = origin.replace(/\/+$/, "").toLowerCase();
+          return cleanAllowed === cleanOrigin;
+        });
+
+        if (isAllowed) {
+          return callback(null, true);
+        }
+
+        logger.warn({ origin, allowedOrigins: env.CORS_ORIGINS }, "Origen bloqueado por política CORS");
+        return callback(null, false);
+      },
       credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
     }),
   );
   app.use(
