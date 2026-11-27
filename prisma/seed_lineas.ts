@@ -16,9 +16,9 @@ const LINEAS_CATALOGO: LineaConfig[] = [
   { nombre: "BOTA LAG", codigo: "BOTA_LAG", area: "BOTA", orden: 3, diasTolerancia: 5 },
   { nombre: "BOTA FAC", codigo: "BOTA_FAC", area: "BOTA", orden: 4, diasTolerancia: 5 },
   { nombre: "CAJA ESPECIAL", codigo: "CAJA_ESPECIAL", area: "BOTA", orden: 5, diasTolerancia: 5 },
-  // Nuevas en BOTA
   { nombre: "ALTA CALIDAD", codigo: "ALTA_CALIDAD", area: "BOTA", orden: 6, diasTolerancia: 5 },
   { nombre: "LAGARTO", codigo: "LAGARTO", area: "BOTA", orden: 7, diasTolerancia: 5 },
+  { nombre: "BETA 7", codigo: "BETA_7", area: "BOTA", orden: 8, diasTolerancia: 5 },
 
   // ─── BLOQUE ACCESORIOS ───
   // Mantener las existentes en su orden actual
@@ -26,10 +26,8 @@ const LINEAS_CATALOGO: LineaConfig[] = [
   { nombre: "CINTOS MAQ", codigo: "CINTOS_MAQ", area: "ACCESORIOS", orden: 2, diasTolerancia: 5 },
   { nombre: "BILLETERAS", codigo: "BILLETERAS", area: "ACCESORIOS", orden: 3, diasTolerancia: 5 },
   { nombre: "CHAMARRAS", codigo: "CHAMARRAS", area: "ACCESORIOS", orden: 4, diasTolerancia: 5 },
-  { nombre: "BETA 7", codigo: "BETA_7", area: "ACCESORIOS", orden: 5, diasTolerancia: 5 },
-  { nombre: "BOLSAS", codigo: "BOLSAS", area: "ACCESORIOS", orden: 6, diasTolerancia: 5 },
-  // Nueva en ACCESORIOS
-  { nombre: "CHAMRS", codigo: "CHAMRS", area: "ACCESORIOS", orden: 7, diasTolerancia: 5 },
+  { nombre: "BOLSAS", codigo: "BOLSAS", area: "ACCESORIOS", orden: 5, diasTolerancia: 5 },
+  { nombre: "CHAMRS", codigo: "CHAMRS", area: "ACCESORIOS", orden: 6, diasTolerancia: 5 },
 ];
 
 async function seedLineas() {
